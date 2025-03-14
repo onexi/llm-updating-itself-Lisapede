@@ -45,18 +45,17 @@
       }
 
       function write_to_div(route, message, jsonOutput = null, functions = null) {
-          // ✅ Update Agent Context Window
-          document.getElementById("response").innerText = message || "No response received.";
+          // Update the Agent Context Window
+          let responseDiv = document.getElementById("response");
+          responseDiv.innerHTML = message ? JSON.stringify(message, null, 2) : "No response";
 
-          // ✅ Update JSON Output Section
-          document.getElementById("json_output").innerText = jsonOutput 
-              ? JSON.stringify(jsonOutput, null, 2) 
-              : "No JSON Output";
+          // ✅ Update JSON Output section
+          let jsonOutputDiv = document.getElementById("json_output");
+          jsonOutputDiv.innerHTML = jsonOutput ? JSON.stringify(jsonOutput, null, 2) : "No JSON Output";
 
-          // ✅ Update Functions Section
-          document.getElementById("functions").innerText = functions 
-              ? JSON.stringify(functions, null, 2) 
-              : "No Functions Available";
+          // ✅ Update Functions section
+          let functionsDiv = document.getElementById("functions");
+          functionsDiv.innerHTML = functions ? JSON.stringify(functions, null, 2) : "No Functions Available";
       }
 
 
@@ -121,47 +120,65 @@
           responseDiv.appendChild(span);
           responseDiv.appendChild(document.createElement("br")); // Add a line break for readability
         });
-      
-     
-      async function sendRequest(route) {
-
-        await get_data_from_elements(); // Ensure state is updated
-
-        console.log(`Sending data to ${route}: ${JSON.stringify(state)}`);
-
-        let response = await fetch(`/${route}`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify(state),
-            mode: "cors",
-        });
-
-        let res;
-        try {
-            res = await response.json();
-            console.log(`Received response: ${JSON.stringify(res)}`);
-        } catch (error) {
-            console.error("Error parsing JSON response", error);
-            return;
+      }
+      async function sendRequest(action) {
+        get_data_from_elements();
+        
+        // Get the selected target (Assistant or ChatGPT) from the dropdown
+        const selectedTarget = document.getElementById("target_selection").value;
+        
+        let route;
+        
+        // Determine route based on the selection
+        if (selectedTarget === "assistant") {
+          route = `api/assistant/${action}`;
+        } else if (selectedTarget === "chatgpt") {
+          route = `api/chatgpt/${action}`;
         }
+      
+        console.log(`sending data: ${JSON.stringify(state)} to ${route}`);
+        let response = await fetch(`/${route}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(state),
+          mode: "cors",
+        });
+        let res = await response.json(); // we always get back {message, state}
+        console.log(`In UI response: ${JSON.stringify(res)}`);
+        await parse_response(route, res);
+      
+        return;
+      }
+      async function sendRequest(route) {
+        get_data_from_elements();
+            // Get the selected target (Assistant or ChatGPT) from the dropdown
+      
+        console.log(`sending data: ${JSON.stringify(state)} to ${route}`);
+        let response = await fetch(`/${route}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(state),
+          mode: "cors",
+        });
+        let res = await response.json(); // we always get back {message, state}
+        console.log(`In UI response: ${JSON.stringify(res)}`);
+        await parse_response(route, res);
 
-      // Pass JSON Output and Functions explicitly
-      await parse_response(route, res);
-  }
-
-
-    async function parse_response(route, res) {
-      console.log(`Processing response from ${route}: ${JSON.stringify(res)}`);
-
-      write_data_to_elements(res.state);
-
-      // Ensure JSON Output and Functions are displayed
-      write_to_div(route, res.message, res.json_output, res.functions);
-  }
-
-
+        return;
+      }
+      async function parse_response(route, res) {
+        console.log(
+          `In UI parse_response ${route} data =: ${JSON.stringify(res.state)}`
+        );
+        write_data_to_elements(res.state);
+        console.log(`Updated state:: ${JSON.stringify(state)}`);
+        console.log(`write to div: ${JSON.stringify(res.message)}`);
+        write_to_div(route, res.message);
+      }
     </script>
   </head>
   <body>

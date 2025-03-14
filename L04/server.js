@@ -22,7 +22,7 @@ async function searchMemories(query) {
         const queryWords = new Set(lowerQuery.split(/\s+/)); // Tokenize query into words
 
         // Define stopwords to ignore in matching
-        const stopwords = new Set(["what", "is", "the", "who", "to", "a"]);
+        const stopwords = new Set(["what", "is", "the", "who", "to", "a", "does"]);
 
         // Improved filtering logic: Match query with memory keys & values
         const filteredMemories = memories.filter(entry =>
@@ -30,12 +30,12 @@ async function searchMemories(query) {
                 const lowerKey = key.toLowerCase();
                 const lowerValue = value.toLowerCase();
 
-                // Check if query contains the key (e.g., "favorite_food")
+                // ✅ Prioritize matching memory keys to user query (e.g., "favorite_food")
                 if (queryWords.has(lowerKey)) {
                     return true;
                 }
 
-                // Check if memory value contains a key concept from the query
+                // ✅ Match memory values containing key query words
                 const memoryWords = new Set(lowerValue.split(/\s+/));
                 for (const word of queryWords) {
                     if (!stopwords.has(word) && memoryWords.has(word)) {
@@ -55,7 +55,6 @@ async function searchMemories(query) {
         return "Error retrieving memories.";
     }
 }
-
 
 //previous
 //async function searchMemories(query) {
@@ -176,6 +175,8 @@ app.post('/api/openai-call', async (req, res) => {
         { role: 'user', content: user_message }
     ];
 
+    let jsonOutput = null;
+
     try {
         // Make OpenAI API call
         const response = await openai.chat.completions.create({
@@ -185,33 +186,35 @@ app.post('/api/openai-call', async (req, res) => {
         });
 
         // Handle function calls
+       // Extract function calls if present
         const toolCalls = response.choices[0].message.tool_calls || [];
+        let functionCallOutput = null;
+
         if (toolCalls.length > 0) {
             const toolCall = toolCalls[0]; 
             const functionName = toolCall.function.name;
             const parameters = JSON.parse(toolCall.function.arguments);
 
-            const result = await functions[functionName].execute(...Object.values(parameters));
-            
-            const function_call_result_message = {
-                role: "tool",
-                content: JSON.stringify({ result }),
-                tool_call_id: toolCall.id
+            const functionResult = await functions[functionName].execute(...Object.values(parameters));
+            jsonOutput = {
+                function_name: functionName,
+                parameters: parameters,
+                result: functionResult
             };
 
-            messages.push(response.choices[0].message);
-            messages.push(function_call_result_message);
-
-            const final_response = await openai.chat.completions.create({
-                model: "gpt-4o",
-                messages: messages,
-            });
-
-            let output = final_response.choices[0].message.content;
-            res.json({ message: output, state: state });
-        } else {
-            res.json({ message: response.choices[0].message.content });
+            console.log(`✅ Function Executed: ${JSON.stringify(functionCallOutput)}`);
         }
+
+        // Extract AI response
+        let output = response.choices[0].message.content;
+
+        // Return response as structured JSON
+        res.json({ 
+            message: output, 
+            state: state, 
+            json_output: jsonOutput, 
+            functions: availableFunctions 
+        });
 
     } catch (error) {
         res.status(500).json({ error: 'OpenAI API failed', details: error.message });

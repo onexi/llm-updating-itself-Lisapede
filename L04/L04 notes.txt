@@ -1,5 +1,10 @@
 L04 Testing
 
+The Agent window is right or the JSON output one is right depending on the input. 
+Not sure how to fix.
+
+---------------
+
 Input user prompt:
 who is John married to?
 
@@ -12,6 +17,97 @@ Agent Context Window:
 "John is married to Rita."
 
 JSON Output:
+No JSON Output
 
 
 Functions:
+[
+{
+"type": "function",
+"function": {
+"name": "scratchpad",
+"parameters": {
+"type": "object",
+"properties": {
+"action": {
+"type": "string",
+"description": "action is one of set, get, getall or delete"
+},
+"key": {
+"type": "string",
+"description": "The key to the entity"
+},
+"memory": {
+"type": "string",
+"description": "The text to store"
+}
+},
+"required": [
+"action",
+"key",
+"memory"
+]
+}
+},
+"description": "Given an entity action, key and memory, this function will store, get, list or delete the memory"
+}
+]
+
+----------
+
+Input:
+What is John's favorite food?
+
+Agent Context Window:
+Saved prompt: What is John's favorite food?
+
+<run agent> button
+
+Agent Context Window:
+No response received.
+
+JSON Output:
+{
+"function_name": "scratchpad",
+"parameters": {
+"action": "get",
+"key": "John's favorite food",
+"memory": ""
+},
+"result": {
+"John's favorite food": null
+}
+}
+
+Functions:
+[
+{
+"type": "function",
+"function": {
+"name": "scratchpad",
+"parameters": {
+"type": "object",
+"properties": {
+"action": {
+"type": "string",
+"description": "action is one of set, get, getall or delete"
+},
+"key": {
+"type": "string",
+"description": "The key to the entity"
+},
+"memory": {
+"type": "string",
+"description": "The text to store"
+}
+},
+"required": [
+"action",
+"key",
+"memory"
+]
+}
+},
+"description": "Given an entity action, key and memory, this function will store, get, list or delete the memory"
+}
+]
