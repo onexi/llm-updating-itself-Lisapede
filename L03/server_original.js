@@ -153,73 +153,72 @@ app.post('/api/execute-function', async (req, res) => {
 
 // Example to interact with OpenAI API and get function descriptions
 app.post('/api/openai-call', async (req, res) => {
+    const { user_message } = req.body;
+
+    const functions = await getFunctions();
+    const availableFunctions = Object.values(functions).map(fn => fn.details);
+    console.log(`availableFunctions: ${JSON.stringify(availableFunctions)}`);
+    let messages = [
+        { role: 'system', content: 'You are a helpful assistant.' },
+        { role: 'user', content: user_message }
+    ];
     try {
-        const { user_message } = req.body;
-
-        console.log("🔹 Received OpenAI call with user message:", user_message);
-
-        if (!user_message) {
-            console.error("❌ Error: Missing user_message in request.");
-            return res.status(400).json({ error: "Missing user_message" });
-        }
-
-        const functions = await getFunctions();
-        const availableFunctions = Object.values(functions).map(fn => fn.details);
-
-        console.log("🔹 Available Functions for OpenAI:", JSON.stringify(availableFunctions, null, 2));
-
-        let messages = [
-            { role: 'system', content: 'You are a helpful assistant. Always call functions when available.' },
-            { role: 'user', content: user_message }
-        ];
-
+        // Make OpenAI API call
         const response = await openai.chat.completions.create({
             model: 'gpt-4o',
             messages: messages,
-            tools: availableFunctions,
-            tool_choice: "required"  // ✅ Forces OpenAI to use functions
+            tools: availableFunctions
         });
+       
+        // Extract the arguments for get_delivery_date
+        // Note this code assumes we have already determined that the model generated a function call. See below for a more production ready example that shows how to check if the model generated a function call
+        const toolCall = response.choices[0].message.tool_calls[0];
 
-        console.log("🔹 OpenAI API Response:", JSON.stringify(response, null, 2));
+        // Extract the arguments for get_delivery_date
+        // Note this code assumes we have already determined that the model generated a function call. 
+        if (toolCall) {
+            const functionName = toolCall.function.name;
+            const parameters = JSON.parse(toolCall.function.arguments);
 
-        if (!response.choices || response.choices.length === 0) {
-            console.error("❌ Error: No choices returned from OpenAI.");
-            return res.status(500).json({ error: "No response from OpenAI." });
+            const result = await functions[functionName].execute(...Object.values(parameters));
+            // note that we need to respond with the function call result to the model quoting the tool_call_id
+            const function_call_result_message = {
+                role: "tool",
+                content: JSON.stringify({
+                    result: result
+                }),
+                tool_call_id: response.choices[0].message.tool_calls[0].id
+            };
+            // add to the end of the messages array to send the function call result back to the model
+            messages.push(response.choices[0].message);
+            messages.push(function_call_result_message);
+            const completion_payload = {
+                model: "gpt-4o",
+                messages: messages,
+            };
+            // Call the OpenAI API's chat completions endpoint to send the tool call result back to the model
+            const final_response = await openai.chat.completions.create({
+                model: completion_payload.model,
+                messages: completion_payload.messages
+            });
+            // Extract the output from the final response
+            let output = final_response.choices[0].message.content 
+
+            // This is where the code gets outputted to the Agent Context Window 
+            //res.json({ message:output, state: state });
+
+            res.json({
+                message: output,
+                json_output: result,  // Ensure the UI gets the function result
+                functions: Object.keys(functions),  // Send function names
+                state: state
+            });
+        } else {
+            res.json({ message: 'No function call detected.' });
         }
-
-        const toolCall = response.choices[0].message.tool_calls?.[0];
-
-        if (!toolCall) {
-            console.warn("⚠️ No function call detected.");
-            return res.json({ message: "No function call detected." });
-        }
-
-        console.log("🔹 Detected Function Call:", JSON.stringify(toolCall, null, 2));
-
-        const functionName = toolCall.function.name;
-        const parameters = JSON.parse(toolCall.function.arguments);
-
-        console.log(`🔹 Calling function: ${functionName} with parameters:`, parameters);
-
-        if (!functions[functionName]) {
-            console.error(`Function ${functionName} not found`);
-            return res.status(404).json({ error: "Function not found" });
-        }
-
-        const result = await functions[functionName].execute(...Object.values(parameters));
-
-        console.log(`✅ Function ${functionName} executed successfully. Result:`, result);
-
-        res.json({
-            message: "Function executed successfully",
-            json_output: result,
-            functions: Object.keys(functions),
-            state: state
-        });
 
     } catch (error) {
-        console.error("Internal Server Error:", error);
-        res.status(500).json({ error: "Internal Server Error", details: error.message });
+        res.status(500).json({ error: 'OpenAI API failed', details: error.message });
     }
 });
 

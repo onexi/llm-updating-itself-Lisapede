@@ -46,11 +46,11 @@
 
       function write_to_div(route, message) {
         // Ensure response is a valid array;
-        if (!Array.isArray(message)) {
-          let responseDiv = document.getElementById("response");
-          responseDiv.innerHTML = JSON.stringify(message);
-          return;
-        }
+        //if (!Array.isArray(message)) {
+        //  let responseDiv = document.getElementById("response");
+        //  responseDiv.innerHTML = JSON.stringify(message);
+        //  return;
+        //}
 
         // Select the target div
         let responseDiv = document.getElementById("response");
@@ -62,6 +62,10 @@
         // Clear previous contents
         responseDiv.innerHTML = "";
 
+        if (!Array.isArray(message)) {
+                responseDiv.innerHTML = JSON.stringify(message, null, 2);
+                return;
+        }
         // Iterate through each object in the array
         message.forEach((item) => {
           // Create a new span element for each item
@@ -152,33 +156,79 @@
         return;
       }
       async function sendRequest(route) {
-        get_data_from_elements();
-            // Get the selected target (Assistant or ChatGPT) from the dropdown
-      
-        console.log(`sending data: ${JSON.stringify(state)} to ${route}`);
-        let response = await fetch(`/${route}`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(state),
-          mode: "cors",
-        });
-        let res = await response.json(); // we always get back {message, state}
-        console.log(`In UI response: ${JSON.stringify(res)}`);
-        await parse_response(route, res);
+    get_data_from_elements(); // ✅ Ensure input fields update state correctly
 
-        return;
-      }
-      async function parse_response(route, res) {
-        console.log(
-          `In UI parse_response ${route} data =: ${JSON.stringify(res.state)}`
-        );
-        write_data_to_elements(res.state);
-        console.log(`Updated state:: ${JSON.stringify(state)}`);
-        console.log(`write to div: ${JSON.stringify(res.message)}`);
-        write_to_div(route, res.message);
-      }
+    console.log(`🔹 Sending data: ${JSON.stringify(state)} to ${route}`);
+
+    let response = await fetch(`/${route}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(state),
+        mode: "cors",
+    });
+
+    let res = await response.json();
+    console.log(`🔹 Server Response: ${JSON.stringify(res)}`);
+
+    // ✅ Ensure UI updates with latest state
+    write_data_to_elements(res.state);
+
+    // ✅ Update response fields
+    await parse_response(route, res);
+}
+
+
+    async function parse_response(route, res) {
+    console.log(`🔹 In UI parse_response ${route} data:`, JSON.stringify(res));
+
+    // ✅ Update input fields with new state
+    write_data_to_elements(res.state);
+
+    // ✅ Extract function result and display in Agent Context Window
+    let message = "";
+
+    if (res.json_output && res.json_output.greeting) {
+        message = res.json_output.greeting;  // ✅ Show only the greeting message
+    } else if (res.json_output) {
+        message = JSON.stringify(res.json_output, null, 2);  // ✅ Show full JSON output
+    } else if (res.message) {
+        message = res.message;  // ✅ Show response message if available
+    } else {
+        message = "No output received"; // Fallback message
+    }
+
+    console.log(`Updated Agent Context Window:`, message);
+
+    // ✅ Display message in Agent Context Window
+    document.getElementById("response").textContent = message;
+
+    // ✅ Ensure JSON Output updates correctly
+    if (res.json_output) {
+        document.getElementById("json_output").textContent = JSON.stringify(res.json_output, null, 2);
+    } else {
+        document.getElementById("json_output").textContent = "No JSON output received";
+    }
+
+    // ✅ Ensure Functions list updates correctly
+    if (res.functions) {
+        document.getElementById("functions").textContent = JSON.stringify(res.functions, null, 2);
+    } else {
+        document.getElementById("functions").textContent = "No functions received";
+    }
+}
+
+
+      
+//      async function parse_response(route, res) {
+//        console.log(
+//          `In UI parse_response ${route} data =: ${JSON.stringify(res.state)}`
+//        );
+//        write_data_to_elements(res.state);
+//        console.log(`Updated state:: ${JSON.stringify(state)}`);
+//        console.log(`write to div: ${JSON.stringify(res.message)}`);
+//        write_to_div(route, res.message);
+//      }
+
     </script>
   </head>
   <body>

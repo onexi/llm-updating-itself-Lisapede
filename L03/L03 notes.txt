@@ -1,0 +1,73 @@
+L03 test
+
+------------------
+Send to:
+ChatGPT
+
+Input User Prompt: 
+Add 1 + 2
+
+Agent Context Window updates to:
+"got prompt Add 1 + 2"
+
+Press < Run Agent > Button
+
+Agent Context Window updates to:
+"The sum of 1 and 2 is 3."
+
+JSON Output:
+{ "result": 3 }
+
+Functions:
+[ "addNumbers", "greetUser" ]
+
+------------------
+Send to:
+Assistant
+
+Create Assistant with Name and Tools:
+Lisa007
+<button> 
+
+Create New Context Thread:
+thread001
+<button> 
+
+Input User Prompt: 
+Add 2 + 6
+
+Agent Context Window updates to:
+"got prompt Add 2 + 6"
+
+Press < Run Agent > Button
+
+Agent Context Window updates to:
+"2 + 6 equals 8."
+
+JSON Output:
+{ "result": 8 }
+
+Functions:
+[ "addNumbers", "greetUser" ]
+
+------------------
+
+Send to:
+Chat GPT
+
+Input User Prompt: 
+My name is Lisa
+
+Agent Context Window updates to:
+"got prompt My name is Lisa"
+
+Press < Run Agent > Button
+
+Agent Context Window updates to:
+Hello, Lisa!
+
+JSON Output:
+{ "greeting": "Hello, Lisa!" }
+
+Functions:
+[ "addNumbers", "greetUser" ]

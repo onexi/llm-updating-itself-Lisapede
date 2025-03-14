@@ -1,0 +1,36 @@
+L02 Test by running node server.js
+
+------------------
+
+Call function addNumbers.js 
+
+Function Name:
+addNumbers
+
+Parameters (JSON):
+{
+    "num1": 3,
+    "num2": 5
+}
+
+Result:
+{
+  "result": 8
+}
+
+------------------
+
+Call function greetUser
+
+Function Name:
+greetUser
+
+Parameters (JSON):
+{
+  "name": "Lisa"
+}
+
+Result:
+{
+  "greeting": "Hello, Lisa!"
+}

@@ -69,9 +69,13 @@ app.post('/execute-function', async (req, res) => {
         const parsedParameters = typeof parameters === "string" ? JSON.parse(parameters) : parameters;
 
         console.log("🔹 Parsed parameters:", parsedParameters);
-        const name = parsedParameters && parsedParameters.name ? parsedParameters.name : "Unknown";
-        console.log("🔹 Extracted name:", name);
-        const result = await functions[functionName].execute(name);
+
+        const result = await functions[functionName].execute(...Object.values(parsedParameters));
+
+        //add numbers not working now
+        // const name = parsedParameters && parsedParameters.name ? parsedParameters.name : "Unknown";
+        // console.log("🔹 Extracted name:", name);
+        //const result = await functions[functionName].execute(name);
         
         console.log(`result: ${JSON.stringify(result)}`);
         res.json(result);
