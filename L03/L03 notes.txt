@@ -71,3 +71,20 @@ JSON Output:
 
 Functions:
 [ "addNumbers", "greetUser" ]
+
+
+-------
+
+Created a function called favoriteDessert.js
+
+Input:
+My favorite dessert is cake
+
+Agent Context Window:
+Your favorite dessert is cake!
+
+JSON Output:
+{ "greeting": "Your favorite dessert is cake!" }
+
+Functions:
+[ "addNumbers", "favoriteDessert", "greetUser" ]
