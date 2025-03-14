@@ -62,10 +62,16 @@ async function getFunctions() {
 app.post('/api/execute-function', async (req, res) => {
     const { functionName, parameters } = req.body;
 
+    // debug
+    console.log("🔹 Received function call:", functionName);
+    console.log("🔹 Raw parameters received:", parameters);
+
     // Import all functions
     const functions = await getFunctions();
+    console.log("🔹 Loaded Functions:", JSON.stringify(functions, null, 2));
 
     if (!functions[functionName]) {
+        console.error(`❌ Function ${functionName} not found`); //added 
         return res.status(404).json({ error: 'Function not found' });
     }
 
@@ -73,10 +79,38 @@ app.post('/api/execute-function', async (req, res) => {
         // Call the function
         const result = await functions[functionName].execute(...Object.values(parameters));
         console.log(`result: ${JSON.stringify(result)}`);
+        
         res.json(result);
+        // res.json({ message: "JSON Output", result: result });
+
+        // added to test json_output
+        //res.json({
+        //    message: "Function executed successfully",
+        //    json_output: result, // Ensure the UI can pick this up
+        //   functions
+        // });
     } catch (err) {
         res.status(500).json({ error: 'Function execution failed', details: err.message });
     }
+
+    // added fetch to test json_output
+    // this does not seem to work
+    fetch('/api/execute-function', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            functionName: selectedFunction,
+            parameters: JSON.parse(parametersInput.value)
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log("🔹 Server Response:", data); // Debugging
+    
+        document.getElementById("json-output").value = JSON.stringify(data.json_output, null, 2); // Ensure JSON Output textbox updates
+        document.getElementById("functions").value = JSON.stringify(data.functions, null, 2); // Ensure Functions textbox updates
+    })
+    .catch(error => console.error('Error:', error));
 });
 
 // Example to interact with OpenAI API and get function descriptions
@@ -132,8 +166,15 @@ app.post('/api/openai-call', async (req, res) => {
             // Extract the output from the final response
             let output = final_response.choices[0].message.content 
 
+            // This is where the code gets outputted to the Agent Context Window 
+            //res.json({ message:output, state: state });
 
-            res.json({ message:output, state: state });
+            res.json({
+                message: output,
+                json_output: result,  // Ensure the UI gets the function result
+                functions: Object.keys(functions),  // Send function names
+                state: state
+            });
         } else {
             res.json({ message: 'No function call detected.' });
         }
@@ -142,6 +183,8 @@ app.post('/api/openai-call', async (req, res) => {
         res.status(500).json({ error: 'OpenAI API failed', details: error.message });
     }
 });
+
+// this is what gets added into the Agent Context Window 
 app.post('/api/prompt', async (req, res) => {
     // just update the state with the new prompt
     state = req.body;

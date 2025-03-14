@@ -1,9 +1,36 @@
 import express from 'express';
 import bodyParser from 'body-parser';
+import csvParser from 'csv-parser'; //npm install csv-parser
+
 import { OpenAI} from 'openai';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from "fs";
+import dotenv from 'dotenv';
+dotenv.config();
+
+async function searchMemories(query) {
+    const memoriesPath = path.resolve(__dirname, "./functions/memories.csv"); // Moved inside function
+
+    return new Promise((resolve) => {
+        if (!fs.existsSync(memoriesPath)) {
+            console.error("❌ memories.csv file not found.");
+            return resolve("No relevant memories found 1.");
+        }
+
+        const results = [];
+        fs.createReadStream(memoriesPath)
+            .pipe(csvParser())
+            .on('data', (row) => {
+                if (row.memory && row.memory.toLowerCase().includes(query.toLowerCase())) {
+                    results.push(row.memory);
+                }
+            })
+            .on('end', () => {
+                resolve(results.length ? results.join("\n") : "No relevant memories found 2.");
+            });
+    });
+}
 
 // Initialize Express server
 const app = express();
@@ -84,10 +111,23 @@ app.post('/api/openai-call', async (req, res) => {
     const functions = await getFunctions();
     const availableFunctions = Object.values(functions).map(fn => fn.details);
     console.log(`availableFunctions: ${JSON.stringify(availableFunctions)}`);
+
+    //let messages = [
+    //    { role: 'system', content: 'You are a helpful assistant.' },
+    //    { role: 'user', content: user_message }
+    //];
+
+    // Search memories for relevant context
+    const memoryContext = await searchMemories(user_message);
+    console.log(`🔹 Memory Context: ${memoryContext}`);
+
+    // new
     let messages = [
         { role: 'system', content: 'You are a helpful assistant.' },
+        { role: 'system', content: `Reference memory: ${memoryContext}` }, // Inject memory context
         { role: 'user', content: user_message }
     ];
+
     try {
         // Make OpenAI API call
         const response = await openai.chat.completions.create({
@@ -143,10 +183,47 @@ app.post('/api/openai-call', async (req, res) => {
 app.post('/api/prompt', async (req, res) => {
     // just update the state with the new prompt
     state = req.body;
-    try {
-        res.status(200).json({ message: `got prompt ${state.user_message}`, "state": state });
+    
+    // adding
+    //const userMessage = state.user_message || "No message provided";
+    const userMessage = req.body.user_message;
+    if (!userMessage) {
+        console.error("❌ Missing user_message in request");
+        return res.status(400).json({ error: "user_message is required" });
     }
-    catch (error) {
+    const timestamp = new Date().toISOString();
+
+    // Define file paths
+    const memoriesPath = path.resolve(__dirname, "memories.csv");
+    const scratchpadPath = path.resolve(__dirname, "scratchpad.js");
+    
+    // added
+    try {
+        // Append to memories.csv
+        const csvEntry = `"${timestamp}","${userMessage}"\n`;
+        fs.appendFileSync(memoriesPath, csvEntry);
+        console.log(`✅ Appended to memories.csv: ${csvEntry.trim()}`);
+
+        // Append to scratchpad.js
+        const jsEntry = `\n// ${timestamp}\nconst lastUserMessage = "${userMessage}";\n`;
+        fs.appendFileSync(scratchpadPath, jsEntry);
+        console.log(`✅ Appended to scratchpad.js: ${jsEntry.trim()}`);
+
+        res.status(200).json({ 
+            message: `Saved prompt: ${userMessage}`, 
+            state: state,
+            log: {
+                memories: csvEntry.trim(),
+                scratchpad: jsEntry.trim()
+            }
+        });
+
+
+    // previous code
+    //try {
+    //    res.status(200).json({ message: `got prompt ${state.user_message}`, "state": state });
+    //}
+    } catch (error) {
         console.log(error);
         res.status(500).json({ message: 'User Message Failed', "state": state });
     }

@@ -11,31 +11,50 @@ const execute = async (action, key, memory) => {
 
     try {
         if (action === 'set') {
-            await appendFile(filePath, `${key}, ${memory}\n`);
+            await appendFile(filePath,`${key},${memory}\n`);
             console.log('Memory stored!'+ memory);
             return { [key]: memory };
         } else if (action == 'get') {
             const data = await fs.promises.readFile(filePath, 'utf8');
             const lines = data.split('\n');
             for (const line of lines) {
+
+                //previous
                 const [storedKey, storedMemory] = line.split(',');
-                if (storedKey == key) {
-                    return { key: storedMemory };
+                if (storedKey && storedKey.trim() === key.trim()) {
+                    return { [storedKey]: storedMemory };
                 }
+                //if (storedKey == key) {
+                
+                //new
+                //const match = line.match(/"([^"]+)","([^"]+)"/);
+                //if (match && match[1].trim() === key.trim()) {
+                //    return { key: storedMemory };
+                //}
             }
             return { [key]: null };
         } else if (action == 'getall') {
-            const data = await fs
-                .promises.readFile(filePath, 'utf8')
-                .catch(() => '');
-            const memories = data   
-                .split('\n')
-                .map((line) => {
-                    const   [storedKey, storedMemory] = line.split(',');
-                    return { [storedKey]: storedMemory };
-                });
-    
+            
+            const data = await fs.promises.readFile(filePath, 'utf8').catch(() => '');
+            const memories = data.split('\n').map((line) => {
+                const [storedKey, storedMemory] = line.split(',');
+                return storedKey ? { [storedKey.trim()]: storedMemory.trim() } : null;
+            }).filter(Boolean);
             return memories;
+            
+//            const data = await fs
+//                .promises.readFile(filePath, 'utf8')
+//                .catch(() => '');
+//                const memories = data.split('\n').map((line) => { const match = line.match(/"([^"]+)","([^"]+)"/); return match ? { [match[1].trim()]: match[2].trim() } : null; }).filter(Boolean);	
+//                console.log(`✅ Memory stored: ${key} -> ${memory}`);                    
+                //const memories = data   
+            //    .split('\n')
+            //    .map((line) => {
+//                    const   [storedKey, storedMemory] = line.split(',');
+//                    return { [storedKey]: storedMemory };
+//                });
+    
+//            return memories;
         }
     } catch (err) {
         console.error('Error writing to the file:', err);
