@@ -9,28 +9,77 @@ import fs from "fs";
 import dotenv from 'dotenv';
 dotenv.config();
 
+import { execute as memoryExecute } from "./functions/scratchpad.js";
+
 async function searchMemories(query) {
-    const memoriesPath = path.resolve(__dirname, "./functions/memories.csv"); // Moved inside function
+    try {
+        // Retrieve all stored memories
+        const memories = await memoryExecute("getall", "", "");
+        console.log(`🔹 Retrieved Memories: ${JSON.stringify(memories)}`);
 
-    return new Promise((resolve) => {
-        if (!fs.existsSync(memoriesPath)) {
-            console.error("❌ memories.csv file not found.");
-            return resolve("No relevant memories found 1.");
-        }
+        // Convert query to lowercase and remove punctuation
+        const lowerQuery = query.toLowerCase().replace(/[^\w\s]/g, ""); 
+        const queryWords = new Set(lowerQuery.split(/\s+/)); // Tokenize query into words
 
-        const results = [];
-        fs.createReadStream(memoriesPath)
-            .pipe(csvParser())
-            .on('data', (row) => {
-                if (row.memory && row.memory.toLowerCase().includes(query.toLowerCase())) {
-                    results.push(row.memory);
+        // Define stopwords to ignore in matching
+        const stopwords = new Set(["what", "is", "the", "who", "to", "a"]);
+
+        // Improved filtering logic: Match query with memory keys & values
+        const filteredMemories = memories.filter(entry =>
+            Object.entries(entry).some(([key, value]) => {
+                const lowerKey = key.toLowerCase();
+                const lowerValue = value.toLowerCase();
+
+                // Check if query contains the key (e.g., "favorite_food")
+                if (queryWords.has(lowerKey)) {
+                    return true;
                 }
+
+                // Check if memory value contains a key concept from the query
+                const memoryWords = new Set(lowerValue.split(/\s+/));
+                for (const word of queryWords) {
+                    if (!stopwords.has(word) && memoryWords.has(word)) {
+                        return true;
+                    }
+                }
+
+                return false;
             })
-            .on('end', () => {
-                resolve(results.length ? results.join("\n") : "No relevant memories found 2.");
-            });
-    });
+        ).filter(entry => !Object.keys(entry)[0].startsWith("user_input_")); // Exclude past queries
+
+        console.log(`🔹 Filtered Relevant Memories: ${JSON.stringify(filteredMemories)}`);
+
+        return filteredMemories.length ? filteredMemories.map(entry => JSON.stringify(entry)).join("\n") : "No relevant memories found.";
+    } catch (error) {
+        console.error("❌ Error searching memories:", error);
+        return "Error retrieving memories.";
+    }
 }
+
+
+//previous
+//async function searchMemories(query) {
+//    const memoriesPath = path.resolve(__dirname, "./functions/memories.csv");
+
+//    return new Promise((resolve) => {
+//        if (!fs.existsSync(memoriesPath)) {
+//            console.error("❌ memories.csv file not found.");
+//            return resolve("No relevant memories found 1.");
+//        }
+
+//        const results = [];
+//        fs.createReadStream(memoriesPath)
+//            .pipe(csvParser())
+//            .on('data', (row) => {
+//                if (row.memory && row.memory.toLowerCase().includes(query.toLowerCase())) {
+//                    results.push(row.memory);
+//                }
+//            })
+//            .on('end', () => {
+//               resolve(results.length ? results.join("\n") : "No relevant memories found 2.");
+//            });
+//    });
+//}
 
 // Initialize Express server
 const app = express();
@@ -121,10 +170,9 @@ app.post('/api/openai-call', async (req, res) => {
     const memoryContext = await searchMemories(user_message);
     console.log(`🔹 Memory Context: ${memoryContext}`);
 
-    // new
     let messages = [
         { role: 'system', content: 'You are a helpful assistant.' },
-        { role: 'system', content: `Reference memory: ${memoryContext}` }, // Inject memory context
+        { role: 'system', content: `Reference memory: ${memoryContext}` }, // ✅ Inject memory context
         { role: 'user', content: user_message }
     ];
 
@@ -135,99 +183,71 @@ app.post('/api/openai-call', async (req, res) => {
             messages: messages,
             tools: availableFunctions
         });
-       
-       // Extract the arguments for get_delivery_date
-// Note this code assumes we have already determined that the model generated a function call. See below for a more production ready example that shows how to check if the model generated a function call
-        const toolCall = response.choices[0].message.tool_calls[0];
 
-// Extract the arguments for get_delivery_date
-// Note this code assumes we have already determined that the model generated a function call. 
-        if (toolCall) {
+        // Handle function calls
+        const toolCalls = response.choices[0].message.tool_calls || [];
+        if (toolCalls.length > 0) {
+            const toolCall = toolCalls[0]; 
             const functionName = toolCall.function.name;
             const parameters = JSON.parse(toolCall.function.arguments);
 
             const result = await functions[functionName].execute(...Object.values(parameters));
-// note that we need to respond with the function call result to the model quoting the tool_call_id
+            
             const function_call_result_message = {
                 role: "tool",
-                content: JSON.stringify({
-                    result: result
-                }),
-                tool_call_id: response.choices[0].message.tool_calls[0].id
+                content: JSON.stringify({ result }),
+                tool_call_id: toolCall.id
             };
-            // add to the end of the messages array to send the function call result back to the model
+
             messages.push(response.choices[0].message);
             messages.push(function_call_result_message);
-            const completion_payload = {
+
+            const final_response = await openai.chat.completions.create({
                 model: "gpt-4o",
                 messages: messages,
-            };
-            // Call the OpenAI API's chat completions endpoint to send the tool call result back to the model
-            const final_response = await openai.chat.completions.create({
-                model: completion_payload.model,
-                messages: completion_payload.messages
             });
-            // Extract the output from the final response
-            let output = final_response.choices[0].message.content 
 
-
-            res.json({ message:output, state: state });
+            let output = final_response.choices[0].message.content;
+            res.json({ message: output, state: state });
         } else {
-            res.json({ message: 'No function call detected.' });
+            res.json({ message: response.choices[0].message.content });
         }
 
     } catch (error) {
         res.status(500).json({ error: 'OpenAI API failed', details: error.message });
     }
 });
+
+
 app.post('/api/prompt', async (req, res) => {
-    // just update the state with the new prompt
     state = req.body;
     
-    // adding
-    //const userMessage = state.user_message || "No message provided";
     const userMessage = req.body.user_message;
     if (!userMessage) {
         console.error("❌ Missing user_message in request");
         return res.status(400).json({ error: "user_message is required" });
     }
+
     const timestamp = new Date().toISOString();
+    const key = `user_input_${timestamp}`; // Generate a unique key
 
-    // Define file paths
-    const memoriesPath = path.resolve(__dirname, "memories.csv");
-    const scratchpadPath = path.resolve(__dirname, "scratchpad.js");
-    
-    // added
     try {
-        // Append to memories.csv
-        const csvEntry = `"${timestamp}","${userMessage}"\n`;
-        fs.appendFileSync(memoriesPath, csvEntry);
-        console.log(`✅ Appended to memories.csv: ${csvEntry.trim()}`);
-
-        // Append to scratchpad.js
-        const jsEntry = `\n// ${timestamp}\nconst lastUserMessage = "${userMessage}";\n`;
-        fs.appendFileSync(scratchpadPath, jsEntry);
-        console.log(`✅ Appended to scratchpad.js: ${jsEntry.trim()}`);
+        // Use `scratchpad.js` to store the memory
+        await memoryExecute("set", key, userMessage);
+        console.log(`✅ Memory stored via scratchpad.js: ${key} -> ${userMessage}`);
 
         res.status(200).json({ 
             message: `Saved prompt: ${userMessage}`, 
             state: state,
-            log: {
-                memories: csvEntry.trim(),
-                scratchpad: jsEntry.trim()
-            }
+            log: { stored_key: key, stored_memory: userMessage }
         });
-
-
-    // previous code
-    //try {
-    //    res.status(200).json({ message: `got prompt ${state.user_message}`, "state": state });
-    //}
     } catch (error) {
-        console.log(error);
-        res.status(500).json({ message: 'User Message Failed', "state": state });
+        console.error("❌ Error storing memory:", error);
+        res.status(500).json({ error: "User Message Failed", state: state });
     }
 });
+
+
 // Start the server
 const PORT = 3000;
 app.listen(PORT, () => {

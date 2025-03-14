@@ -1,2 +1,17 @@
 L04 Testing
 
+Input user prompt:
+who is John married to?
+
+Agent Context Window:
+"Saved prompt: who is John married to?"
+
+<run agent> button
+
+Agent Context Window:
+"John is married to Rita."
+
+JSON Output:
+
+
+Functions:
