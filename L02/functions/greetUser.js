@@ -1,4 +1,5 @@
 const execute = async (name) => {
+    console.log("Received Name:", name); // Debugging
     return { greeting: `Hello, ${name}!` };
 };
 

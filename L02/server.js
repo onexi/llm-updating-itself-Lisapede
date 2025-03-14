@@ -4,6 +4,8 @@ import { OpenAI} from 'openai';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from "fs";
+import dotenv from 'dotenv';
+dotenv.config();
 
 // Initialize Express server
 const app = express();
@@ -15,7 +17,8 @@ const __dirname = path.dirname(__filename);
 app.use(express.static(path.resolve(process.cwd(), './public')));
 
 // OpenAI API configuration
-const openai = new OpenAI({
+const openai = 
+new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
 });
 
@@ -47,16 +50,29 @@ async function getFunctions() {
 app.post('/execute-function', async (req, res) => {
     const { functionName, parameters } = req.body;
 
+    console.log("🔹 Received function call:", functionName);
+    console.log("🔹 Raw parameters received:", parameters);
+
     // Import all functions
     const functions = await getFunctions();
 
     if (!functions[functionName]) {
+        console.error(`Function ${functionName} not found`);
         return res.status(404).json({ error: 'Function not found' });
     }
 
     try {
         // Call the function
-        const result = await functions[functionName].execute(...Object.values(parameters));
+        // const result = await functions[functionName].execute(...Object.values(parameters));
+        
+        // new code
+        const parsedParameters = typeof parameters === "string" ? JSON.parse(parameters) : parameters;
+
+        console.log("🔹 Parsed parameters:", parsedParameters);
+        const name = parsedParameters && parsedParameters.name ? parsedParameters.name : "Unknown";
+        console.log("🔹 Extracted name:", name);
+        const result = await functions[functionName].execute(name);
+        
         console.log(`result: ${JSON.stringify(result)}`);
         res.json(result);
     } catch (err) {
